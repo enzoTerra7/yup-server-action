@@ -1,37 +1,46 @@
 import { useState } from "react";
 import type { ServerAction } from "./create-server-action";
 
-type UseServerActionOptions<TResult> = {
-  onSuccess?: (data: TResult) => void;
+type InferInput<T> = T extends ServerAction<infer Input, any> ? Input : never;
+type InferResult<T> = T extends ServerAction<any, infer Result>
+  ? Result
+  : never;
+
+type UseServerActionOptions<TAction extends ServerAction<any, any>> = {
+  onSuccess?: (data: InferResult<TAction>) => void;
   onError?: (error: unknown) => void;
 };
 
-type UseServerActionReturn<TInput, TResult> = {
-  execute: TInput extends undefined ? () => Promise<void> : (input: TInput) => Promise<void>;
+type UseServerActionReturn<TAction extends ServerAction<any, any>> = {
+  execute: InferInput<TAction> extends undefined
+    ? () => Promise<void>
+    : (input: InferInput<TAction>) => Promise<void>;
   isPending: boolean;
   isSuccess: boolean;
   isError: boolean;
-  data: undefined | TResult;
-  error: undefined | unknown;
+  data: InferResult<TAction> | undefined;
+  error: unknown | undefined;
 };
 
-export function useServerAction<TInput, TResult>(
-  action: ServerAction<TInput>,
-  options?: UseServerActionOptions<TResult>
-): UseServerActionReturn<TInput, TResult> {
+export function useServerAction<TAction extends ServerAction<any, any>>(
+  action: TAction,
+  options?: UseServerActionOptions<TAction>
+): UseServerActionReturn<TAction> {
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
-  const [data, setData] = useState<undefined | TResult>(undefined);
-  const [error, setError] = useState<undefined | unknown>(undefined);
+  const [data, setData] = useState<InferResult<TAction> | undefined>(undefined);
+  const [error, setError] = useState<unknown | undefined>(undefined);
 
-  const execute = async (...args: TInput extends undefined ? [] : [TInput]): Promise<void> => {
+  const execute = async (
+    ...args: InferInput<TAction> extends undefined ? [] : [InferInput<TAction>]
+  ): Promise<void> => {
     setIsPending(true);
     setIsSuccess(false);
     setIsError(false);
 
     try {
-      const result = await action.run(...(args as [TInput extends undefined ? void : TInput]));
+      const result = await action.run(...(args as [InferInput<TAction>]));
       options?.onSuccess?.(result);
       setIsSuccess(true);
       setData(result);
@@ -46,7 +55,7 @@ export function useServerAction<TInput, TResult>(
   };
 
   return {
-    execute: execute as TInput extends undefined ? () => Promise<void> : (input: TInput) => Promise<void>,
+    execute: execute as UseServerActionReturn<TAction>["execute"],
     isPending,
     isSuccess,
     isError,
